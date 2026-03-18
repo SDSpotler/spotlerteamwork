@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Teamwork Projecten</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --border: #d9dde3;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --hover: #f3f4f6;
+      --accent: #2563eb;
+      --accent-soft: #eef2ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 24px;
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap {
+      max-width: 1450px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin: 0 0 16px;
+      font-size: 28px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 16px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .toolbar input,
+    .toolbar select,
+    .toolbar button {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+      background: #fff;
+    }
+
+    .toolbar input {
+      min-width: 280px;
+      flex: 1;
+    }
+
+    .toolbar button {
+      cursor: pointer;
+    }
+
+    .toolbar button:hover {
+      background: var(--hover);
+    }
+
+    .status {
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead {
+      background: #f9fafb;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      font-size: 14px;
+    }
+
+    th {
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    th.sortable:hover {
+      background: #f3f4f6;
+    }
+
+    tbody tr:hover {
+      background: #fafafa;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .empty {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .info-btn {
+      border: 1px solid var(--border);
+      background: white;
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .info-btn:hover {
+      background: var(--hover);
+    }
+
+    .details-row td {
+      background: #fbfcff;
+      padding-top: 0;
+    }
+
+    .details-box {
+      margin: 12px 0;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: white;
+    }
+
+    .details-title {
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 8px 14px;
+    }
+
+    .detail-key {
+      font-weight: 600;
+      color: var(--muted);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #3730a3;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 900px) {
+      body { padding: 12px; }
+      .toolbar input { min-width: 100%; }
+      th, td { padding: 10px; font-size: 13px; }
+      .detail-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Teamwork Projecten</h1>
+
+    <div class="toolbar">
+      <input
+        type="text"
+        id="searchInput"
+        placeholder="Zoek op projectnaam, project ID, owner of software"
+      />
+
+      <select id="ownerFilter">
+        <option value="">Alle owners</option>
+      </select>
+
+      <button id="refreshBtn" type="button">Verversen</button>
+    </div>
+
+    <div class="status" id="status">Nog niets geladen</div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="name">Projectnaam</th>
+            <th class="sortable" data-sort="id">ProjectID</th>
+            <th class="sortable" data-sort="owner">Projectowner</th>
+            <th class="sortable" data-sort="companyName">Software</th>
+            <th class="sortable" data-sort="createdAt">CreatedAt</th>
+            <th>Info</th>
+          </tr>
+        </thead>
+        <tbody id="projects-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    let allProjects = [];
+    let filteredProjects = [];
+    let currentSort = { key: "createdAt", direction: "desc" };
+    const detailCache = new Map();
+    const openDetails = new Set();
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function formatDate(value) {
+      if (!value) return "Onbekend";
+      const date = new Date(value);
+      if (isNaN(date.getTime())) return "Onbekend";
+      return date.toLocaleString("nl-NL");
+    }
+
+    function getOwnerName(project) {
+      const owner = project.projectOwner || {};
+      const fullName = [owner.firstName, owner.lastName].filter(Boolean).join(" ").trim();
+      return fullName || "Onbekend";
+    }
+
+    function sortProjects(projects) {
+      const { key, direction } = currentSort;
+      const factor = direction === "asc" ? 1 : -1;
+
+      projects.sort((a, b) => {
+        let valA = a[key];
+        let valB = b[key];
+
+        if (key === "createdAt") {
+          valA = valA ? new Date(valA).getTime() : 0;
+          valB = valB ? new Date(valB).getTime() : 0;
+        } else if (key === "id") {
+          valA = Number(valA) || 0;
+          valB = Number(valB) || 0;
+        } else {
+          valA = String(valA || "").toLowerCase();
+          valB = String(valB || "").toLowerCase();
+        }
+
+        if (valA < valB) return -1 * factor;
+        if (valA > valB) return 1 * factor;
+        return 0;
+      });
+    }
+
+    function populateOwnerFilter(projects) {
+      const ownerFilter = document.getElementById("ownerFilter");
+      const currentValue = ownerFilter.value;
+
+      const owners = [...new Set(projects.map(p => p.owner))].sort((a, b) => a.localeCompare(b, "nl"));
+      ownerFilter.innerHTML = '<option value="">Alle owners</option>';
+
+      for (const owner of owners) {
+        const option = document.createElement("option");
+        option.value = owner;
+        option.textContent = owner;
+        ownerFilter.appendChild(option);
+      }
+
+      ownerFilter.value = owners.includes(currentValue) ? currentValue : "";
+    }
+
+    function renderDetailsHtml(detailData) {
+      const fields = Array.isArray(detailData.customfields) ? detailData.customfields : [];
+
+      if (!fields.length) {
+        return `
+          <div class="details-box">
+            <div class="details-title">Extra info</div>
+            <div class="empty">Geen custom fields gevonden</div>
+          </div>
+        `;
+      }
+
+      const rows = fields.map(field => {
+        const label = field.name || `Field ${field.id}`;
+        const value = field.value || "Leeg";
+
+        return `
+          <div class="detail-key">${escapeHtml(label)}</div>
+          <div>${escapeHtml(value)}</div>
+        `;
+      }).join("");
+
+      return `
+        <div class="details-box">
+          <div class="details-title">Extra info</div>
+          <div class="detail-grid">
+            ${rows}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProjects() {
+      const tbody = document.getElementById("projects-body");
+      const searchValue = document.getElementById("searchInput").value.trim().toLowerCase();
+      const ownerValue = document.getElementById("ownerFilter").value;
+
+      filteredProjects = allProjects.filter(project => {
+        const matchesSearch =
+          project.name.toLowerCase().includes(searchValue) ||
+          String(project.id).toLowerCase().includes(searchValue) ||
+          project.owner.toLowerCase().includes(searchValue) ||
+          (project.companyName || "").toLowerCase().includes(searchValue);
+
+        const matchesOwner = !ownerValue || project.owner === ownerValue;
+
+        return matchesSearch && matchesOwner;
+      });
+
+      sortProjects(filteredProjects);
+
+      tbody.innerHTML = "";
+
+      if (filteredProjects.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="empty">Geen projecten gevonden</td>
+          </tr>
+        `;
+      } else {
+        for (const project of filteredProjects) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${escapeHtml(project.name)}</td>
+            <td>${escapeHtml(project.id)}</td>
+            <td>${escapeHtml(project.owner)}</td>
+            <td>${project.companyName ? `<span class="pill">${escapeHtml(project.companyName)}</span>` : '<span class="empty">Onbekend</span>'}</td>
+            <td>${escapeHtml(project.createdAtFormatted)}</td>
+            <td>
+              <button class="info-btn" data-project-id="${project.id}">
+                ${openDetails.has(project.id) ? "Sluit" : "Info"}
+              </button>
+            </td>
+          `;
+          tbody.appendChild(tr);
+
+          if (openDetails.has(project.id)) {
+            const detailsRow = document.createElement("tr");
+            detailsRow.className = "details-row";
+
+            const detailsCell = document.createElement("td");
+            detailsCell.colSpan = 6;
+
+            if (detailCache.has(project.id)) {
+              detailsCell.innerHTML = renderDetailsHtml(detailCache.get(project.id));
+            } else {
+              detailsCell.innerHTML = `
+                <div class="details-box">
+                  <div class="details-title">Extra info</div>
+                  <div class="muted">Details laden...</div>
+                </div>
+              `;
+            }
+
+            detailsRow.appendChild(detailsCell);
+            tbody.appendChild(detailsRow);
+          }
+        }
+      }
+
+      bindInfoButtons();
+
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = `Geladen: ${filteredProjects.length} van ${allProjects.length} projecten`;
+    }
+
+    async function loadProjects() {
+      const statusEl = document.getElementById("status");
+      statusEl.textContent = "Data laden...";
+
+      try {
+        const response = await fetch("data.json?v=" + Date.now());
+        if (!response.ok) {
+          throw new Error(`Kon data.json niet laden (${response.status})`);
+        }
+
+        const data = await response.json();
+        const projects = Array.isArray(data.projects) ? data.projects : [];
+
+        allProjects = projects.map(project => ({
+          ...project,
+          owner: getOwnerName(project),
+          companyName: project.companyName || "",
+          createdAtFormatted: formatDate(project.createdAt)
+        }));
+
+        populateOwnerFilter(allProjects);
+        renderProjects();
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = "Fout bij laden van data.json";
+        document.getElementById("projects-body").innerHTML = `
+          <tr>
+            <td colspan="6" class="empty">Kon data niet laden</td>
+          </tr>
+        `;
+      }
+    }
+
+    async function toggleDetails(projectId) {
+      if (openDetails.has(projectId)) {
+        openDetails.delete(projectId);
+        renderProjects();
+        return;
+      }
+
+      openDetails.add(projectId);
+      renderProjects();
+
+      if (detailCache.has(projectId)) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`details/${projectId}.json?v=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error(`Kon details niet laden (${response.status})`);
+        }
+
+        const detailData = await response.json();
+        detailCache.set(projectId, detailData);
+      } catch (error) {
+        console.error(error);
+        detailCache.set(projectId, {
+          projectId,
+          customfields: [
+            { id: 37806, name: "accountmanager", value: "Fout bij laden" },
+            { id: 41213, name: "status project", value: "Fout bij laden" }
+          ]
+        });
+      }
+
+      renderProjects();
+    }
+
+    function bindInfoButtons() {
+      document.querySelectorAll(".info-btn").forEach(button => {
+        button.addEventListener("click", () => {
+          const projectId = Number(button.dataset.projectId);
+          toggleDetails(projectId);
+        });
+      });
+    }
+
+    function setupEvents() {
+      document.getElementById("searchInput").addEventListener("input", renderProjects);
+      document.getElementById("ownerFilter").addEventListener("change", renderProjects);
+      document.getElementById("refreshBtn").addEventListener("click", loadProjects);
+
+      document.querySelectorAll("th.sortable").forEach(th => {
+        th.addEventListener("click", () => {
+          const key = th.dataset.sort;
+
+          if (currentSort.key === key) {
+            currentSort.direction = currentSort.direction === "asc" ? "desc" : "asc";
+          } else {
+            currentSort.key = key;
+            currentSort.direction = key === "createdAt" ? "desc" : "asc";
+          }
+
+          renderProjects();
+        });
+      });
+    }
+
+    setupEvents();
+    loadProjects();
+  </script>
+</body>
+</html>

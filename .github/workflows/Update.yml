@@ -30,7 +30,7 @@ jobs:
       - name: Run update script
         env:
           TEAMWORK_API_KEY: ${{ secrets.TEAMWORK_API_KEY }}
-        run: python scripts/update_teamwork.py
+        run: python update_teamwork.py
 
       - name: Commit updated JSON files
         run: |
